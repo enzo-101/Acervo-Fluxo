@@ -77,6 +77,7 @@ Tudo em `.env` (veja `.env.example` para a lista comentada). Os que você provav
 | `EXTRA_BLOCKED_DOMAINS` | vazio | Domínios que nunca contam |
 | `COUNT_NATIVE_MEDIA` | `false` | Conta vídeo/áudio/imagem soltos |
 | `MAX_MESSAGE_AGE_DAYS` | `7` | Idade máxima de mensagem da fila offline |
+| `BOT_PHONE_NUMBER` | vazio | Número do bot; ativa pareamento por código |
 | `LOG_LEVEL` | `silent` | Verbosidade do Baileys (`debug` para investigar) |
 
 Para descobrir o ID de um grupo, rode o bot uma vez, mande qualquer material lá e depois:
@@ -90,7 +91,7 @@ Isso lista os grupos conhecidos com seus IDs (`120363…@g.us`).
 ## Ferramentas
 
 ```bash
-npm test               # 33 testes, sem tocar no WhatsApp
+npm test               # 35 testes, sem tocar no WhatsApp
 npm run ranking        # lista grupos
 npm run ranking -- 120363...@g.us mes   # ranking pelo terminal
 npm start -- --resumo-agora             # dispara o resumo diário na hora, para testar
@@ -100,7 +101,7 @@ npm start -- --resumo-agora             # dispara o resumo diário na hora, para
 
 ```
 src/
-  index.js            conexão Baileys, QR, reconexão, ciclo de vida
+  index.js            conexão Baileys, pareamento, reconexão, ciclo de vida
   bot.js              o que fazer com cada mensagem (agnóstico de biblioteca)
   baileys-message.js  traduz a mensagem crua do Baileys para o formato do bot
   detect.js           o que é "conhecimento" (lógica pura, testável)
@@ -112,6 +113,30 @@ src/
 ```
 
 `bot.js` não conhece o Baileys: recebe uma mensagem normalizada e um `transport` com `reply()` e `react()`. É por isso que dá para testar o fluxo inteiro sem WhatsApp — e por isso trocar de biblioteca depois mexe só em `index.js` e `baileys-message.js`.
+
+## Rodando em servidor (Railway, VPS…)
+
+Duas coisas mudam em relação a rodar na sua máquina.
+
+### 1. Volume persistente
+
+O disco do container é efêmero: todo redeploy apaga `data/auth` (a sessão) e `data/ranking.db` (o ranking). Monte um volume em:
+
+```
+/app/data
+```
+
+### 2. Pareamento por código, não por QR
+
+QR code em log de nuvem não funciona: o desenho em ASCII é quebrado pelo visualizador e cada QR vale só 20 segundos. Defina a variável com o número do bot (DDI + DDD, só dígitos):
+
+```
+BOT_PHONE_NUMBER=5521999998888
+```
+
+Nos logs aparece um código tipo `XBH9-PBEE`. No celular do bot: **Aparelhos conectados → Conectar aparelho → "Vincular com número de telefone"**, e digite. O código vale ~3 minutos e é texto puro, então nenhuma formatação de log o estraga.
+
+Sem essa variável, o bot continua usando QR — que é o certo quando você roda localmente.
 
 ## Manter o bot no ar
 

@@ -27,6 +27,9 @@ function list(name) {
 export const config = {
   dbPath: path.resolve(str('DB_PATH', './data/ranking.db')),
   logLevel: str('LOG_LEVEL', 'silent'),
+  // Numero do bot com DDI, so digitos (ex.: 5521999998888). Preenchido, o
+  // pareamento passa a ser por codigo de 8 caracteres em vez de QR code.
+  botPhoneNumber: str('BOT_PHONE_NUMBER', '').replace(/\D/g, ''),
   timezone: str('TZ', 'America/Sao_Paulo'),
   dailySummaryCron: str('DAILY_SUMMARY_CRON', '0 20 * * *'),
   dailySummaryOnlyIfActive: bool('DAILY_SUMMARY_ONLY_IF_ACTIVE', true),

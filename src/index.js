@@ -39,6 +39,35 @@ async function nomeDoGrupo(groupId) {
   }
 }
 
+/**
+ * Pede o codigo de pareamento e imprime em texto puro.
+ *
+ * Existe porque QR code em log de nuvem nao funciona: o desenho e quebrado
+ * pelo visualizador e a janela e de 20 segundos. O codigo vale ~3 minutos e
+ * sobrevive a qualquer formatacao.
+ */
+async function pedirCodigo() {
+  try {
+    const codigo = await sock.requestPairingCode(config.botPhoneNumber);
+    const formatado = codigo.match(/.{1,4}/g)?.join('-') ?? codigo;
+    console.log('\n' + '='.repeat(46));
+    console.log('📱 CODIGO DE PAREAMENTO');
+    console.log('');
+    console.log(`        >>>  ${formatado}  <<<`);
+    console.log('');
+    console.log(`   No celular do numero +${config.botPhoneNumber}:`);
+    console.log('   WhatsApp > Aparelhos conectados');
+    console.log('   > Conectar aparelho');
+    console.log('   > "Vincular com numero de telefone"');
+    console.log('   e digite o codigo acima.');
+    console.log('='.repeat(46) + '\n');
+  } catch (error) {
+    console.error('❌ Nao foi possivel gerar o codigo de pareamento:', error.message);
+    console.error(`   Confira se BOT_PHONE_NUMBER (${config.botPhoneNumber}) e o numero`);
+    console.error('   do bot com DDI e DDD, so digitos. Ex.: 5521999998888');
+  }
+}
+
 /** Envia texto para um chat. Usado pelo resumo diario. */
 async function send(groupId, texto) {
   await sock.sendMessage(groupId, { text: texto });
@@ -62,11 +91,16 @@ async function connect() {
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log(`🔌 Protocolo WhatsApp v${version.join('.')}${isLatest ? '' : ' (nao e a mais recente)'}`);
 
+  const usarCodigo = config.botPhoneNumber.length > 0 && !state.creds.registered;
+  let codigoPedido = false;
+
   sock = makeWASocket({
     version,
     auth: state,
     logger,
-    browser: Browsers.appropriate('Desktop'),
+    // 'Chrome' e o tipo de cliente que o pareamento por codigo espera; um
+    // browser 'Desktop' vira UWP/Electron e o codigo nao e aceito.
+    browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
@@ -74,6 +108,15 @@ async function connect() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    // O evento de QR so chega com a conexao ja aberta, que e justamente o que
+    // requestPairingCode precisa. Por isso ele e o gatilho, e nao um timer.
+    if (qr && usarCodigo) {
+      if (codigoPedido) return;
+      codigoPedido = true;
+      pedirCodigo();
+      return;
+    }
+
     if (qr) {
       console.log('\n📱 Escaneie o QR abaixo com o celular do NUMERO DO BOT');
       console.log('   (WhatsApp > Aparelhos conectados > Conectar aparelho)\n');
@@ -150,4 +193,15 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (error) => console.error('[unhandledRejection]', error));
 
 console.log('🚀 Iniciando...');
+
+if (config.botPhoneNumber) {
+  console.log(`   Pareamento por codigo, numero +${config.botPhoneNumber}`);
+  if (config.botPhoneNumber.length < 10 || config.botPhoneNumber.length > 15) {
+    console.warn('⚠️  BOT_PHONE_NUMBER parece invalido: use DDI + DDD + numero,');
+    console.warn('   so digitos, sem + nem espacos. Ex.: 5521999998888');
+  }
+} else {
+  console.log('   Pareamento por QR code (defina BOT_PHONE_NUMBER para usar codigo)');
+}
+
 await connect();
