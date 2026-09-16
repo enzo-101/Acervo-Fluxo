@@ -1,0 +1,23 @@
+{
+  "name": "whatsapp-ranking-conhecimento",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bot de WhatsApp que detecta PDFs, arquivos e links de conhecimento em grupos e mantem um ranking top 10 de contribuicoes.",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "ranking": "node scripts/ranking-cli.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "baileys": "^7.0.0-rc14",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "pino": "^9.14.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
