@@ -9,7 +9,7 @@ import {
   DisconnectReason,
   Browsers,
 } from 'baileys';
-import { config, isGroupAllowed } from './config.js';
+import { config, isGroupAllowed, isPipeGroup } from './config.js';
 import { handleIncoming } from './bot.js';
 import { normalize } from './baileys-message.js';
 import { startScheduler, startLeadWatcher, sendDailySummary } from './scheduler.js';
@@ -132,15 +132,17 @@ async function connect() {
     if (connection === 'open') {
       console.log('✅ Bot online.');
       console.log(`   Banco: ${config.dbPath}`);
-      console.log(`   Grupos: ${config.allowedGroups.length ? config.allowedGroups.join(', ') : 'todos'}`);
+      const escopo = (lista) => (lista.length ? lista.join(', ') : 'todos os grupos');
+      console.log(`   Bot ativo em: ${escopo(config.allowedGroups)}`);
+      console.log(`   Ranking em:   ${escopo(config.rankingGroups)}`);
+      console.log(`   Comercial em: ${config.pipefyToken ? escopo(config.pipeGroups) : 'desligado (sem PIPEFY_TOKEN)'}`);
       if (!schedulerIniciado) {
         startScheduler(send);
-        // Sem restricao de grupo: o aviso de lead vai para todo grupo que o bot
-        // conhece. Para restringir a um grupo so, use ALLOWED_GROUPS.
+        // Lead novo so vai para grupo de escopo comercial (PIPE_GROUPS).
         startLeadWatcher(send, () =>
           getAllGroups()
             .map((g) => g.group_id)
-            .filter(isGroupAllowed)
+            .filter(isPipeGroup)
         );
         schedulerIniciado = true;
       }

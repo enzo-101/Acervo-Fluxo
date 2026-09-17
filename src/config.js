@@ -56,11 +56,30 @@ export const config = {
   countNativeMedia: bool('COUNT_NATIVE_MEDIA', false),
   dedupFilesByHash: bool('DEDUP_FILES_BY_HASH', false),
   allowedGroups: list('ALLOWED_GROUPS'),
+  // Escopo por assunto. Vazio = sem restricao, o comportamento de hoje.
+  // ALLOWED_GROUPS continua valendo por cima: ele liga/desliga o bot inteiro.
+  rankingGroups: list('RANKING_GROUPS'),
+  pipeGroups: list('PIPE_GROUPS'),
   extraKnowledgeDomains: list('EXTRA_KNOWLEDGE_DOMAINS'),
   extraBlockedDomains: list('EXTRA_BLOCKED_DOMAINS'),
 };
 
+function pertence(lista, groupId) {
+  if (lista.length === 0) return true; // lista vazia = todo grupo
+  return lista.includes(String(groupId).toLowerCase());
+}
+
+/** O bot responde neste grupo? */
 export function isGroupAllowed(groupId) {
-  if (config.allowedGroups.length === 0) return true;
-  return config.allowedGroups.includes(groupId.toLowerCase());
+  return pertence(config.allowedGroups, groupId);
+}
+
+/** Este grupo contabiliza ranking e responde !ranking/!meu/!ultimas? */
+export function isRankingGroup(groupId) {
+  return isGroupAllowed(groupId) && pertence(config.rankingGroups, groupId);
+}
+
+/** Este grupo ve o funil comercial: !pipe e avisos de lead novo? */
+export function isPipeGroup(groupId) {
+  return isGroupAllowed(groupId) && pertence(config.pipeGroups, groupId);
 }

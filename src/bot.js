@@ -1,4 +1,4 @@
-import { config, isGroupAllowed } from './config.js';
+import { config, isGroupAllowed, isRankingGroup } from './config.js';
 import { classifyMessage } from './detect.js';
 import {
   rememberGroup,
@@ -50,6 +50,10 @@ export async function handleIncoming(incoming, transport) {
     if (resposta) await transport.reply(resposta);
     return { action: resposta ? 'command' : 'unknown-command' };
   }
+
+  // Fora dos grupos de ranking o bot nao contabiliza nada: no grupo do
+  // comercial ele so responde !pipe e anuncia lead.
+  if (!isRankingGroup(groupId)) return { action: 'ignored' };
 
   const items = classifyMessage(
     { text, attachment },

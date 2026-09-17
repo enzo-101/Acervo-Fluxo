@@ -73,6 +73,25 @@ Protege contra três ruídos comuns:
 - **A primeira execução é silenciosa.** Com o banco vazio, todo card do pipe pareceria novo — então ele registra tudo sem anunciar e passa a avisar do próximo em diante.
 - **Card antigo não vira lead novo.** `LEAD_MAX_AGE_HOURS` (24h) evita que uma edição num card velho dispare alarme, e `LEAD_MAX_POR_RODADA` impede que uma importação em massa vire enxurrada.
 
+## Escopo por grupo
+
+O bot faz duas coisas para dois públicos diferentes, e elas não devem se misturar: o funil comercial não pode aparecer no grupo do acervo.
+
+`ALLOWED_GROUPS` não resolve isso — ele liga ou desliga o bot inteiro num grupo. Para separar por assunto:
+
+```
+RANKING_GROUPS=120363...acervo@g.us
+PIPE_GROUPS=120363...comercial@g.us
+```
+
+Com isso:
+
+- No **acervo**, o bot conta material e responde `!ranking`, `!meu`, `!ultimas`, `!regras`. O `!pipe` é ignorado **em silêncio** — responder "você não pode" já revelaria que existe um funil comercial em algum lugar.
+- No **comercial**, ele responde `!pipe` e anuncia lead novo. Material compartilhado ali **não** vira ranking paralelo.
+- O `!ajuda` se adapta: em cada grupo lista só o que existe ali.
+
+Qualquer uma das duas variáveis vazia significa "vale em todo grupo" — o comportamento anterior, para nada quebrar em quem não configurar.
+
 ## O que conta como contribuição
 
 **Anexos:** `.pdf` `.doc(x)` `.ppt(x)` `.xls(x)` `.odt` `.ods` `.odp` `.txt` `.md` `.csv` `.epub` `.mobi` `.ipynb` `.tex` `.zip` `.rar` `.7z` `.tar.gz` — e áudio/vídeo enviado **como documento**.
@@ -98,7 +117,9 @@ Tudo em `.env` (veja `.env.example` para a lista comentada). Os que você provav
 | `CONFIRM_MODE` | `reaction` | `reaction`, `reply`, `both` ou `silent` |
 | `MAX_ITEMS_PER_MESSAGE` | `3` | Teto de itens por mensagem |
 | `RANKING_SIZE` | `10` | Tamanho do top |
-| `ALLOWED_GROUPS` | vazio | Restringe a grupos específicos |
+| `ALLOWED_GROUPS` | vazio | Restringe o bot inteiro a grupos específicos |
+| `RANKING_GROUPS` | vazio | Onde o ranking funciona |
+| `PIPE_GROUPS` | vazio | Onde !pipe e os avisos de lead funcionam |
 | `EXTRA_KNOWLEDGE_DOMAINS` | vazio | Domínios que também devem contar |
 | `EXTRA_BLOCKED_DOMAINS` | vazio | Domínios que nunca contam |
 | `COUNT_NATIVE_MEDIA` | `false` | Conta vídeo/áudio/imagem soltos |

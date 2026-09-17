@@ -1,4 +1,4 @@
-import { config } from './config.js';
+import { config, isRankingGroup, isPipeGroup } from './config.js';
 import { getRecent } from './db.js';
 import { buildRankingText, buildPersonalText, resolvePeriod } from './ranking.js';
 import { buildPipeReport, explicarErro } from './pipe-report.js';
@@ -32,24 +32,42 @@ function formatDate(timestamp) {
   }).format(new Date(timestamp));
 }
 
-const HELP_TEXT = [
-  '📚 *Bot do Ranking de Conhecimento*',
-  '',
-  'Eu acompanho o grupo e conto toda vez que alguem compartilha material: PDF, documento, slide, planilha, e-book, .zip/.rar, link de Drive/Docs/Notion, artigo, repositorio, curso, aula, video ou podcast.',
-  '',
-  '*Comandos*',
-  '`!ranking` — top 10 geral',
-  '`!ranking mes` · `!ranking semana` · `!ranking hoje` — por periodo',
-  '`!meu` — sua posicao e quanto falta para subir',
-  '`!ultimas` — os ultimos materiais compartilhados',
-  '`!regras` — o que conta e o que nao conta',
-  '',
-  '*Comercial*',
-  '`!pipe` — situacao do funil e conversao da semana',
-  '`!pipe mes` · `!pipe hoje` — outros periodos',
-  '',
-  '_Todo dia eu posto o top 10 automaticamente._',
-].join('\n');
+/**
+ * A ajuda mostra so o que vale naquele grupo — anunciar o !pipe no grupo do
+ * acervo denunciaria que existe um funil comercial em algum lugar.
+ */
+function montarAjuda(groupId) {
+  const linhas = ['🤖 *Bot da Fluxo*', ''];
+
+  if (isRankingGroup(groupId)) {
+    linhas.push(
+      'Eu conto toda vez que alguem compartilha material: PDF, documento, slide, planilha, e-book, .zip/.rar, link de Drive/Docs/Notion, artigo, repositorio, curso, aula, video ou podcast.',
+      '',
+      '*Ranking*',
+      '`!ranking` — top 10 geral',
+      '`!ranking mes` · `!ranking semana` · `!ranking hoje` — por periodo',
+      '`!meu` — sua posicao e quanto falta para subir',
+      '`!ultimas` — os ultimos materiais compartilhados',
+      '`!regras` — o que conta e o que nao conta',
+      '',
+      '_Todo dia eu posto o top 10 automaticamente._'
+    );
+  }
+
+  if (isPipeGroup(groupId) && config.pipefyToken) {
+    if (linhas.length > 2) linhas.push('');
+    linhas.push(
+      '*Comercial*',
+      '`!pipe` — situacao do funil e conversao da semana',
+      '`!pipe mes` · `!pipe hoje` — outros periodos',
+      '',
+      '_Aviso de lead novo assim que cai no Pipefy._'
+    );
+  }
+
+  if (linhas.length === 2) linhas.push('_Nada configurado para este grupo._');
+  return linhas.join('\n');
+}
 
 const RULES_TEXT = [
   '📋 *O que conta como contribuicao*',
@@ -70,11 +88,36 @@ const RULES_TEXT = [
 ].join('\n');
 
 /**
+ * A que assunto cada comando pertence. O escopo decide em que grupos ele
+ * responde: dado comercial nao deve aparecer no grupo do acervo, e ranking
+ * no grupo do comercial so faria ruido.
+ */
+const ESCOPOS = {
+  ranking: 'ranking', rank: 'ranking', top: 'ranking', top10: 'ranking',
+  meu: 'ranking', meus: 'ranking', minhas: 'ranking', eu: 'ranking',
+  ultimas: 'ranking', ultimos: 'ranking', recentes: 'ranking',
+  regras: 'ranking', oquevale: 'ranking', criterios: 'ranking',
+  pipe: 'pipe', funil: 'pipe',
+  // ajuda/help ficam de fora: respondem em qualquer grupo permitido.
+};
+
+/** O comando pode rodar neste grupo? */
+export function comandoPermitido(name, groupId) {
+  const escopo = ESCOPOS[name];
+  if (!escopo) return true;
+  return escopo === 'pipe' ? isPipeGroup(groupId) : isRankingGroup(groupId);
+}
+
+/**
  * Executa um comando. Devolve o texto da resposta, ou `null` se o comando
- * nao existir (nesse caso o bot fica quieto).
+ * nao existir ou nao valer neste grupo (nesses casos o bot fica quieto).
  */
 export async function runCommand({ name, args }, context) {
   const { groupId, authorId, displayName } = context;
+
+  // Silencio de proposito: responder "voce nao pode" ja revelaria que existe
+  // um funil comercial em algum lugar. Quem tem acesso sabe onde pedir.
+  if (!comandoPermitido(name, groupId)) return null;
 
   switch (name) {
     case 'ranking':
@@ -131,7 +174,7 @@ export async function runCommand({ name, args }, context) {
     case 'help':
     case 'comandos':
     case 'bot':
-      return HELP_TEXT;
+      return montarAjuda(groupId);
 
     default:
       return null;

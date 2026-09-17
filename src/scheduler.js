@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { config, isGroupAllowed } from './config.js';
+import { config, isRankingGroup } from './config.js';
 import { getActiveGroupsSince, getAllGroups, getTotals } from './db.js';
 import { buildRankingText, startOfDay } from './ranking.js';
 import { checarLeads } from './lead-watcher.js';
@@ -15,7 +15,7 @@ export async function sendDailySummary(send) {
     ? getActiveGroupsSince(dayStart)
     : getAllGroups().map((row) => row.group_id);
 
-  const targets = groupIds.filter(isGroupAllowed);
+  const targets = groupIds.filter(isRankingGroup);
   if (targets.length === 0) {
     console.log('[resumo] nenhum grupo com atividade hoje — nada enviado');
     return;
