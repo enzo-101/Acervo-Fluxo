@@ -170,6 +170,19 @@ export async function runCommand({ name, args }, context) {
     case 'criterios':
       return RULES_TEXT;
 
+    case 'id':
+    case 'grupo':
+      // O ID do grupo nao aparece em lugar nenhum da interface do WhatsApp, e
+      // o banco fica no volume do servidor. Perguntar ao bot e o caminho curto
+      // para preencher RANKING_GROUPS e PIPE_GROUPS.
+      return [
+        '🆔 *ID deste grupo*',
+        '',
+        `\`${groupId}\``,
+        '',
+        '_Copie e cole em RANKING_GROUPS ou PIPE_GROUPS._',
+      ].join('\n');
+
     case 'ajuda':
     case 'help':
     case 'comandos':

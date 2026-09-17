@@ -100,6 +100,17 @@ test('ajuda responde em qualquer grupo permitido', () => {
   assert.equal(comandoPermitido('ajuda', OUTRO), true);
 });
 
+
+test('!id responde em qualquer grupo, inclusive fora de escopo', async () => {
+  // Precisa funcionar em grupo nenhum dos dois escopos: e justamente ali que
+  // voce precisa descobrir o ID para preencher as variaveis.
+  for (const grupo of [ACERVO, COMERCIAL, OUTRO]) {
+    const resposta = await runCommand({ name: 'id', args: [] }, contexto(grupo));
+    assert.match(resposta, new RegExp(grupo.replace('@', '@')), `deveria responder em ${grupo}`);
+    assert.match(resposta, /ID deste grupo/);
+  }
+});
+
 test.after(() => {
   closeDb();
   fs.rmSync(tmpDir, { recursive: true, force: true });

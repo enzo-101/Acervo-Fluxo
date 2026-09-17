@@ -43,6 +43,7 @@ Escaneie o QR. Quando aparecer `✅ Bot online.`, adicione o número ao grupo e 
 | `!regras` | O que conta e o que não conta |
 | `!pipe` | Funil comercial do Pipefy: situação e conversão da semana |
 | `!pipe mes` / `hoje` | Funil em outro período |
+| `!id` | Responde o ID do grupo, para preencher RANKING_GROUPS/PIPE_GROUPS |
 | `!ajuda` | Lista de comandos |
 
 `/` também funciona como prefixo (`/ranking`).
@@ -136,7 +137,7 @@ Para descobrir o ID de um grupo, rode o bot uma vez, mande qualquer material lá
 npm run ranking
 ```
 
-Isso lista os grupos conhecidos com seus IDs (`120363…@g.us`).
+Isso só funciona com o banco na máquina. Com o bot num servidor, o banco fica no volume de lá — então mande **`!id`** no próprio grupo e o bot responde com o ID. O WhatsApp não mostra esse ID em lugar nenhum da interface.
 
 ## Ferramentas
 
