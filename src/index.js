@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
@@ -8,11 +9,11 @@ import {
   DisconnectReason,
   Browsers,
 } from 'baileys';
-import { config } from './config.js';
+import { config, isGroupAllowed } from './config.js';
 import { handleIncoming } from './bot.js';
 import { normalize } from './baileys-message.js';
-import { startScheduler, sendDailySummary } from './scheduler.js';
-import { closeDb } from './db.js';
+import { startScheduler, startLeadWatcher, sendDailySummary } from './scheduler.js';
+import { closeDb, getAllGroups } from './db.js';
 
 const authDir = path.join(path.dirname(config.dbPath), 'auth');
 const logger = pino({ level: config.logLevel });
@@ -26,6 +27,11 @@ let schedulerIniciado = false;
 
 // `npm start -- --resumo-agora` dispara o resumo uma unica vez, para testar.
 let resumoManualPendente = process.argv.includes('--resumo-agora');
+
+// Quantas vezes aceitamos apagar a sessao e refazer o pareamento antes de
+// concluir que o problema nao e a credencial em disco.
+const MAX_LIMPEZAS = 3;
+let limpezasDeSessao = 0;
 
 async function nomeDoGrupo(groupId) {
   if (nomesDeGrupo.has(groupId)) return nomesDeGrupo.get(groupId);
@@ -129,6 +135,13 @@ async function connect() {
       console.log(`   Grupos: ${config.allowedGroups.length ? config.allowedGroups.join(', ') : 'todos'}`);
       if (!schedulerIniciado) {
         startScheduler(send);
+        // Sem restricao de grupo: o aviso de lead vai para todo grupo que o bot
+        // conhece. Para restringir a um grupo so, use ALLOWED_GROUPS.
+        startLeadWatcher(send, () =>
+          getAllGroups()
+            .map((g) => g.group_id)
+            .filter(isGroupAllowed)
+        );
         schedulerIniciado = true;
       }
       if (resumoManualPendente) {
@@ -145,11 +158,29 @@ async function connect() {
       console.warn(`⚠️  Conexao caiu (${codigo ?? 'motivo desconhecido'}).`);
 
       if (encerrando) return;
+
       if (deslogado) {
-        console.error(`❌ Sessao invalidada. Apague ${authDir} e escaneie o QR de novo.`);
-        process.exit(1);
+        // Um pareamento que nao se completa deixa credenciais pela metade em
+        // disco, e elas fazem o WhatsApp responder 401 em todo boot seguinte.
+        // Sair do processo aqui cria um loop de reinicio no servidor, que
+        // nunca chega a emitir um codigo novo — entao limpamos e recomecamos.
+        if (limpezasDeSessao >= MAX_LIMPEZAS) {
+          console.error('❌ Sessao recusada mesmo apos limpar. Desistindo para nao entrar em loop.');
+          console.error(`   Apague ${authDir} e confira BOT_PHONE_NUMBER.`);
+          process.exit(1);
+        }
+        limpezasDeSessao += 1;
+        console.warn(`🧹 Sessao invalidada. Limpando ${authDir} e recomecando o pareamento`);
+        console.warn(`   (tentativa ${limpezasDeSessao} de ${MAX_LIMPEZAS})`);
+        try {
+          fs.rmSync(authDir, { recursive: true, force: true });
+        } catch (error) {
+          console.error('   Falha ao limpar a sessao:', error.message);
+        }
+      } else {
+        console.log('   Reconectando em 5s...');
       }
-      console.log('   Reconectando em 5s...');
+
       setTimeout(() => connect().catch((e) => console.error('[reconexao]', e)), 5000);
     }
   });

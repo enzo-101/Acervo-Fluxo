@@ -48,6 +48,14 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_contrib_author
     ON contributions (group_id, author_id, created_at);
+
+  -- Leads do Pipefy ja anunciados, para nunca avisar o mesmo card duas vezes
+  -- nem reanunciar tudo depois de um reinicio.
+  CREATE TABLE IF NOT EXISTS leads_avisados (
+    card_id    TEXT PRIMARY KEY,
+    created_at INTEGER,
+    avisado_em INTEGER NOT NULL
+  );
 `);
 
 const statements = {
@@ -127,6 +135,11 @@ const statements = {
     SELECT DISTINCT group_id FROM contributions WHERE created_at >= ?
   `),
   allGroups: db.prepare('SELECT group_id, name FROM groups'),
+  marcarLead: db.prepare(
+    'INSERT OR IGNORE INTO leads_avisados (card_id, created_at, avisado_em) VALUES (?, ?, ?)'
+  ),
+  buscarLead: db.prepare('SELECT card_id FROM leads_avisados WHERE card_id = ?'),
+  contarLeads: db.prepare('SELECT COUNT(*) AS total FROM leads_avisados'),
   groupName: db.prepare('SELECT name FROM groups WHERE group_id = ?'),
 };
 
@@ -210,6 +223,18 @@ export function getAllGroups() {
 
 export function getGroupName(groupId) {
   return statements.groupName.get(groupId)?.name ?? null;
+}
+
+export function marcarLeadAvisado(cardId, createdAt) {
+  statements.marcarLead.run(String(cardId), createdAt ?? null, Date.now());
+}
+
+export function jaAvisouLead(cardId) {
+  return Boolean(statements.buscarLead.get(String(cardId)));
+}
+
+export function contarLeadsAvisados() {
+  return statements.contarLeads.get()?.total ?? 0;
 }
 
 export function closeDb() {

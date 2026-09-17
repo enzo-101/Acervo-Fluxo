@@ -46,7 +46,7 @@ export async function handleIncoming(incoming, transport) {
 
   const command = parseCommand(text);
   if (command) {
-    const resposta = runCommand(command, { groupId, authorId, displayName });
+    const resposta = await runCommand(command, { groupId, authorId, displayName });
     if (resposta) await transport.reply(resposta);
     return { action: resposta ? 'command' : 'unknown-command' };
   }

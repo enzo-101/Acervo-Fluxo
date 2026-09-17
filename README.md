@@ -41,11 +41,37 @@ Escaneie o QR. Quando aparecer `✅ Bot online.`, adicione o número ao grupo e 
 | `!meu` | Sua posição e quanto falta para subir |
 | `!ultimas` | Últimos materiais compartilhados |
 | `!regras` | O que conta e o que não conta |
+| `!pipe` | Funil comercial do Pipefy: situação e conversão da semana |
+| `!pipe mes` / `hoje` | Funil em outro período |
 | `!ajuda` | Lista de comandos |
 
 `/` também funciona como prefixo (`/ranking`).
 
 Além disso, **todo dia às 20h** (configurável) o bot posta o top 10 automaticamente nos grupos que tiveram atividade.
+
+## Pipefy: funil e leads
+
+Duas funções que dependem do Pipefy. Sem `PIPEFY_TOKEN` configurado elas ficam desligadas e o bot serve só o ranking.
+
+### `!pipe` — situação do funil
+
+Traz três blocos: quantos cards há em cada etapa agora, a conversão por etapa e a conversão por coordenação (as tags PRO, MNP, ACE, QAB…).
+
+**A conversão aqui é por coorte, não razão de estoque.** Para cada etapa, o bot conta quem *entrou* nela no período e quantos desses chegaram a alguma etapa seguinte — usando o `phases_history` de cada card. É diferente de dividir o número de cards de uma etapa pelo da anterior: essa razão mede acúmulo, e pode marcar 50% numa semana em que ninguém converteu nada.
+
+A última etapa do pipe não recebe taxa — dela não se avança, então mostrar 0% leria como fracasso quando é o contrário. Ali aparece quantos chegaram.
+
+As etapas são **descobertas em tempo de execução**. Renomear ou criar fase no Pipefy não exige deploy.
+
+### Aviso de lead novo
+
+A cada 2 minutos o bot procura cards criados desde a última checagem e anuncia no grupo. Usa polling em vez de webhook de propósito: nada de porta HTTP aberta, URL pública ou segredo de webhook para proteger.
+
+Protege contra três ruídos comuns:
+
+- **Nunca avisa duas vezes.** Cada card anunciado fica registrado em `leads_avisados`, então reinício não reanuncia nada.
+- **A primeira execução é silenciosa.** Com o banco vazio, todo card do pipe pareceria novo — então ele registra tudo sem anunciar e passa a avisar do próximo em diante.
+- **Card antigo não vira lead novo.** `LEAD_MAX_AGE_HOURS` (24h) evita que uma edição num card velho dispare alarme, e `LEAD_MAX_POR_RODADA` impede que uma importação em massa vire enxurrada.
 
 ## O que conta como contribuição
 
@@ -78,6 +104,9 @@ Tudo em `.env` (veja `.env.example` para a lista comentada). Os que você provav
 | `COUNT_NATIVE_MEDIA` | `false` | Conta vídeo/áudio/imagem soltos |
 | `MAX_MESSAGE_AGE_DAYS` | `7` | Idade máxima de mensagem da fila offline |
 | `BOT_PHONE_NUMBER` | vazio | Número do bot; ativa pareamento por código |
+| `PIPEFY_TOKEN` | vazio | Token da API do Pipefy; vazio desliga !pipe e leads |
+| `PIPEFY_PIPE_ID` | `156763` | Pipe lido pelo bot |
+| `LEAD_POLL_CRON` | `*/2 * * * *` | Frequência da busca por leads novos |
 | `LOG_LEVEL` | `silent` | Verbosidade do Baileys (`debug` para investigar) |
 
 Para descobrir o ID de um grupo, rode o bot uma vez, mande qualquer material lá e depois:
@@ -91,7 +120,7 @@ Isso lista os grupos conhecidos com seus IDs (`120363…@g.us`).
 ## Ferramentas
 
 ```bash
-npm test               # 35 testes, sem tocar no WhatsApp
+npm test               # 56 testes, sem tocar no WhatsApp nem no Pipefy
 npm run ranking        # lista grupos
 npm run ranking -- 120363...@g.us mes   # ranking pelo terminal
 npm start -- --resumo-agora             # dispara o resumo diário na hora, para testar
@@ -102,6 +131,10 @@ npm start -- --resumo-agora             # dispara o resumo diário na hora, para
 ```
 src/
   index.js            conexão Baileys, pareamento, reconexão, ciclo de vida
+  pipefy.js           cliente GraphQL do Pipefy
+  funil.js            métricas do funil (lógica pura, testável)
+  pipe-report.js      monta o texto do !pipe, com cache
+  lead-watcher.js     vigia de leads novos por polling
   bot.js              o que fazer com cada mensagem (agnóstico de biblioteca)
   baileys-message.js  traduz a mensagem crua do Baileys para o formato do bot
   detect.js           o que é "conhecimento" (lógica pura, testável)

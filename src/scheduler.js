@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { config, isGroupAllowed } from './config.js';
 import { getActiveGroupsSince, getAllGroups, getTotals } from './db.js';
 import { buildRankingText, startOfDay } from './ranking.js';
+import { checarLeads } from './lead-watcher.js';
 
 /**
  * Monta e envia o resumo diario para os grupos relevantes.
@@ -35,6 +36,40 @@ export async function sendDailySummary(send) {
       console.error(`[resumo] falhou para ${groupId}:`, error.message);
     }
   }
+}
+
+/**
+ * Liga o vigia de leads. Sem token configurado ele nem sobe — assim o bot
+ * continua servindo o ranking normalmente em quem nao usa o Pipefy.
+ */
+export function startLeadWatcher(send, destinos) {
+  if (!config.pipefyToken) {
+    console.log('[leads] PIPEFY_TOKEN ausente — vigia de leads desligado');
+    return null;
+  }
+  if (!cron.validate(config.leadPollCron)) {
+    console.error(`[leads] cron invalido: "${config.leadPollCron}" — vigia desligado`);
+    return null;
+  }
+
+  const tarefa = cron.schedule(
+    config.leadPollCron,
+    () => {
+      checarLeads(send, destinos)
+        .then((r) => {
+          if (r.status === 'primeira-execucao') {
+            console.log(`[leads] primeira execucao: ${r.registrados} cards registrados sem anunciar`);
+          } else if (r.avisados > 0) {
+            console.log(`[leads] ${r.avisados} lead(s) anunciado(s)`);
+          }
+        })
+        .catch((error) => console.error('[leads] erro:', error.message));
+    },
+    { timezone: config.timezone }
+  );
+
+  console.log(`[leads] vigia ativo: "${config.leadPollCron}" · pipe ${config.pipefyPipeId}`);
+  return tarefa;
 }
 
 export function startScheduler(send) {

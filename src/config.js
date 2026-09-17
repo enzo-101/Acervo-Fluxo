@@ -27,6 +27,16 @@ function list(name) {
 export const config = {
   dbPath: path.resolve(str('DB_PATH', './data/ranking.db')),
   logLevel: str('LOG_LEVEL', 'silent'),
+
+  // --- Pipefy ---
+  pipefyToken: str('PIPEFY_TOKEN', ''),
+  pipefyPipeId: str('PIPEFY_PIPE_ID', '156763'),
+  pipefyCacheMs: int('PIPEFY_CACHE_SECONDS', 180) * 1000,
+  leadPollCron: str('LEAD_POLL_CRON', '*/2 * * * *'),
+  // Na primeira vez que o vigia roda ele so registra; depois disso, este corte
+  // evita que um card antigo editado apareca como "lead novo".
+  leadMaxAgeMs: int('LEAD_MAX_AGE_HOURS', 24) * 60 * 60 * 1000,
+  leadMaxPorRodada: int('LEAD_MAX_POR_RODADA', 5),
   // Numero do bot com DDI, so digitos (ex.: 5521999998888). Preenchido, o
   // pareamento passa a ser por codigo de 8 caracteres em vez de QR code.
   botPhoneNumber: str('BOT_PHONE_NUMBER', '').replace(/\D/g, ''),

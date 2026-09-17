@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { getRecent } from './db.js';
 import { buildRankingText, buildPersonalText, resolvePeriod } from './ranking.js';
+import { buildPipeReport, explicarErro } from './pipe-report.js';
 
 /**
  * Se a mensagem for um comando, devolve `{ name, args }`. Senao, `null`.
@@ -43,6 +44,10 @@ const HELP_TEXT = [
   '`!ultimas` — os ultimos materiais compartilhados',
   '`!regras` — o que conta e o que nao conta',
   '',
+  '*Comercial*',
+  '`!pipe` — situacao do funil e conversao da semana',
+  '`!pipe mes` · `!pipe hoje` — outros periodos',
+  '',
   '_Todo dia eu posto o top 10 automaticamente._',
 ].join('\n');
 
@@ -68,7 +73,7 @@ const RULES_TEXT = [
  * Executa um comando. Devolve o texto da resposta, ou `null` se o comando
  * nao existir (nesse caso o bot fica quieto).
  */
-export function runCommand({ name, args }, context) {
+export async function runCommand({ name, args }, context) {
   const { groupId, authorId, displayName } = context;
 
   switch (name) {
@@ -85,6 +90,17 @@ export function runCommand({ name, args }, context) {
         highlightAuthorId: authorId,
       });
     }
+
+    case 'pipe':
+    case 'funil':
+      if (!config.pipefyToken) {
+        return '⚠️ O !pipe nao esta configurado: falta a variavel PIPEFY_TOKEN.';
+      }
+      try {
+        return await buildPipeReport(args[0] ?? '');
+      } catch (error) {
+        return explicarErro(error);
+      }
 
     case 'meu':
     case 'meus':
