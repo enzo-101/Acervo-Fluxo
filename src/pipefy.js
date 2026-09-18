@@ -102,6 +102,7 @@ const QUERY_CARDS = `
           done
           current_phase { id name }
           labels { id name }
+          fields { name report_value value }
           assignees { id name }
           phases_history { firstTimeIn lastTimeOut phase { id name } }
         }
@@ -139,14 +140,21 @@ export async function fetchCards(pipeId = config.pipefyPipeId, { maxPaginas = 40
 
 /** Achata o card do GraphQL no formato que o resto do bot usa. */
 export function normalizeCard(node) {
+  const id = String(node.id);
   return {
-    id: String(node.id),
+    id,
+    url: `https://app.pipefy.com/open-cards/${id}`,
     title: node.title ?? '(sem titulo)',
     createdAt: node.createdAt ? Date.parse(node.createdAt) : null,
     done: Boolean(node.done),
     phaseId: node.current_phase?.id ? String(node.current_phase.id) : null,
     phaseName: node.current_phase?.name ?? null,
     labels: (node.labels ?? []).map((l) => l.name).filter(Boolean),
+    // report_value ja vem formatado para leitura (datas, selects, moeda);
+    // value e o cru, usado so quando o outro nao existe.
+    fields: (node.fields ?? [])
+      .map((f) => ({ name: f.name ?? '', value: (f.report_value ?? f.value ?? '').trim() }))
+      .filter((f) => f.name && f.value),
     assignees: (node.assignees ?? []).map((a) => a.name).filter(Boolean),
     history: (node.phases_history ?? [])
       .filter((h) => h?.phase?.id)

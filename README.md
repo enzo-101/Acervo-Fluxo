@@ -68,6 +68,10 @@ As etapas são **descobertas em tempo de execução**. Renomear ou criar fase no
 
 A cada 2 minutos o bot procura cards criados desde a última checagem e anuncia no grupo. Usa polling em vez de webhook de propósito: nada de porta HTTP aberta, URL pública ou segredo de webhook para proteger.
 
+O aviso traz os campos que o lead preencheu no formulário (nome, empresa, telefone, demanda…), a etapa, as tags e o link direto do card. Por padrão mostra todos os campos preenchidos, porque os nomes variam de pipe para pipe — `LEAD_FIELDS=nome,empresa,telefone,demanda` restringe e define a ordem.
+
+Não existe URL que atribua responsável em um clique: o link abre o card e a pessoa se atribui lá dentro.
+
 Protege contra três ruídos comuns:
 
 - **Nunca avisa duas vezes.** Cada card anunciado fica registrado em `leads_avisados`, então reinício não reanuncia nada.
@@ -129,6 +133,7 @@ Tudo em `.env` (veja `.env.example` para a lista comentada). Os que você provav
 | `PIPEFY_TOKEN` | vazio | Token da API do Pipefy; vazio desliga !pipe e leads |
 | `PIPEFY_PIPE_ID` | `306460930` | Pipe lido pelo bot |
 | `LEAD_POLL_CRON` | `*/2 * * * *` | Frequência da busca por leads novos |
+| `LEAD_FIELDS` | vazio | Campos do formulário no aviso; vazio = todos |
 | `LOG_LEVEL` | `silent` | Verbosidade do Baileys (`debug` para investigar) |
 
 Para descobrir o ID de um grupo, rode o bot uma vez, mande qualquer material lá e depois:

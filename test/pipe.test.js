@@ -52,7 +52,7 @@ const { checarLeads } = await import('../src/lead-watcher.js');
 const { graphql, PipefyError, fetchCards } = await import('../src/pipefy.js');
 const { contarLeadsAvisados, closeDb } = await import('../src/db.js');
 
-function cardCru({ id, titulo, fase, labels = [], entradas = [], criadoHaHoras = 1 }) {
+function cardCru({ id, titulo, fase, labels = [], entradas = [], criadoHaHoras = 1, campos = [], semDono = false }) {
   return {
     id,
     title: titulo,
@@ -60,7 +60,8 @@ function cardCru({ id, titulo, fase, labels = [], entradas = [], criadoHaHoras =
     done: fase === '3',
     current_phase: { id: fase, name: { 1: 'Prospeccao', 2: 'Qualificacao', 3: 'Ganho' }[fase] },
     labels: labels.map((name, i) => ({ id: String(i), name })),
-    assignees: [{ id: '1', name: 'Jonas' }],
+    fields: campos.map(([name, report_value]) => ({ name, report_value, value: report_value })),
+    assignees: semDono ? [] : [{ id: '1', name: 'Jonas' }],
     phases_history: entradas.map((faseId) => ({
       phase: { id: faseId, name: faseId },
       firstTimeIn: iso(horasAtras(criadoHaHoras)),
@@ -174,6 +175,47 @@ test('card antigo nao e tratado como lead novo', async () => {
   const r = await checarLeads(async (d, t) => enviados.push(d), () => ['g1@g.us']);
   assert.equal(r.avisados, 0);
   assert.deepEqual(enviados, []);
+});
+
+test('o aviso traz os campos do formulario e o link do card', async () => {
+  cardsDoPipe.push(
+    cardCru({
+      id: '20',
+      titulo: 'Contato site',
+      fase: '1',
+      semDono: true,
+      labels: ['PRO'],
+      entradas: ['1'],
+      campos: [
+        ['Nome', 'Maria Souza'],
+        ['Empresa', 'Ocean Pact'],
+        ['Telefone', '(21) 99999-8888'],
+        ['Demanda', 'Precisamos mapear o processo de compras e reduzir retrabalho.'],
+      ],
+    })
+  );
+
+  const enviados = [];
+  await checarLeads(async (d, t) => enviados.push(t), () => ['g1@g.us']);
+  const texto = enviados.at(-1);
+
+  assert.match(texto, /Nome: Maria Souza/);
+  assert.match(texto, /Empresa: Ocean Pact/);
+  assert.match(texto, /Telefone: \(21\) 99999-8888/);
+  assert.match(texto, /Demanda: Precisamos mapear/);
+  assert.match(texto, /Sem responsavel/);
+  assert.match(texto, /https:\/\/app\.pipefy\.com\/open-cards\/20/);
+});
+
+test('campo vazio nao aparece no aviso', async () => {
+  cardsDoPipe.push(
+    cardCru({ id: '21', titulo: 'Parcial', fase: '1', entradas: ['1'], campos: [['Nome', 'Joao'], ['Empresa', '   ']] })
+  );
+  const enviados = [];
+  await checarLeads(async (d, t) => enviados.push(t), () => ['g1@g.us']);
+  const texto = enviados.at(-1);
+  assert.match(texto, /Nome: Joao/);
+  assert.doesNotMatch(texto, /Empresa/);
 });
 
 test.after(() => {

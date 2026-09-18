@@ -37,6 +37,10 @@ export const config = {
   // evita que um card antigo editado apareca como "lead novo".
   leadMaxAgeMs: int('LEAD_MAX_AGE_HOURS', 24) * 60 * 60 * 1000,
   leadMaxPorRodada: int('LEAD_MAX_POR_RODADA', 5),
+  // Quais campos do formulario mostrar no aviso, por trecho do nome e nesta
+  // ordem (ex.: nome,empresa,telefone,demanda). Vazio = todos os preenchidos.
+  leadFields: list('LEAD_FIELDS'),
+  leadMaxCampos: int('LEAD_MAX_CAMPOS', 8),
   // Numero do bot com DDI, so digitos (ex.: 5521999998888). Preenchido, o
   // pareamento passa a ser por codigo de 8 caracteres em vez de QR code.
   botPhoneNumber: str('BOT_PHONE_NUMBER', '').replace(/\D/g, ''),

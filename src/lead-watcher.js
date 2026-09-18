@@ -12,11 +12,47 @@ import { marcarLeadAvisado, jaAvisouLead, contarLeadsAvisados } from './db.js';
 
 let rodando = false;
 
-function formatar(card) {
-  const linhas = [`🆕 *Lead novo no Pipefy*`, '', `*${card.title}*`];
+/** Corta valor longo para o aviso nao virar uma parede de texto. */
+function resumir(valor, max = 180) {
+  const limpo = valor.replace(/\s+/g, ' ').trim();
+  return limpo.length <= max ? limpo : `${limpo.slice(0, max - 1)}…`;
+}
+
+/**
+ * Escolhe o que mostrar do formulario. Sem LEAD_FIELDS configurado mostra
+ * todos os campos preenchidos, porque nao da para adivinhar como o pipe de
+ * cada um se chama. Com a variavel, mostra so aqueles, na ordem pedida.
+ */
+function camposParaMostrar(card) {
+  const desejados = config.leadFields;
+  if (desejados.length === 0) return card.fields.slice(0, config.leadMaxCampos);
+
+  return desejados
+    .map((alvo) => card.fields.find((f) => f.name.toLowerCase().includes(alvo)))
+    .filter(Boolean);
+}
+
+export function formatar(card) {
+  const linhas = ['🆕 *Lead novo no Pipefy*', '', `*${card.title}*`];
+
+  for (const campo of camposParaMostrar(card)) {
+    linhas.push(`${campo.name}: ${resumir(campo.value)}`);
+  }
+
   if (card.phaseName) linhas.push(`Etapa: ${card.phaseName}`);
   if (card.labels.length > 0) linhas.push(`Tags: ${card.labels.join(', ')}`);
-  if (card.assignees.length > 0) linhas.push(`Responsavel: ${card.assignees.join(', ')}`);
+
+  linhas.push('');
+  if (card.assignees.length > 0) {
+    linhas.push(`Responsavel: ${card.assignees.join(', ')}`);
+    linhas.push(card.url);
+  } else {
+    // Nao existe URL que atribua o responsavel em um clique; o link abre o
+    // card e a pessoa se atribui la dentro.
+    linhas.push('👤 *Sem responsavel* — abra e se atribua:');
+    linhas.push(card.url);
+  }
+
   return linhas.join('\n');
 }
 
@@ -74,4 +110,4 @@ export async function checarLeads(send, destinos) {
   }
 }
 
-export { formatar as formatarLead };
+
