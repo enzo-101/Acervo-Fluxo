@@ -30,7 +30,7 @@ export const config = {
 
   // --- Pipefy ---
   pipefyToken: str('PIPEFY_TOKEN', ''),
-  pipefyPipeId: str('PIPEFY_PIPE_ID', '156763'),
+  pipefyPipeId: str('PIPEFY_PIPE_ID', '306460930'),
   pipefyCacheMs: int('PIPEFY_CACHE_SECONDS', 180) * 1000,
   leadPollCron: str('LEAD_POLL_CRON', '*/2 * * * *'),
   // Na primeira vez que o vigia roda ele so registra; depois disso, este corte

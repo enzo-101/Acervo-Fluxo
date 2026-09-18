@@ -127,7 +127,7 @@ Tudo em `.env` (veja `.env.example` para a lista comentada). Os que você provav
 | `MAX_MESSAGE_AGE_DAYS` | `7` | Idade máxima de mensagem da fila offline |
 | `BOT_PHONE_NUMBER` | vazio | Número do bot; ativa pareamento por código |
 | `PIPEFY_TOKEN` | vazio | Token da API do Pipefy; vazio desliga !pipe e leads |
-| `PIPEFY_PIPE_ID` | `156763` | Pipe lido pelo bot |
+| `PIPEFY_PIPE_ID` | `306460930` | Pipe lido pelo bot |
 | `LEAD_POLL_CRON` | `*/2 * * * *` | Frequência da busca por leads novos |
 | `LOG_LEVEL` | `silent` | Verbosidade do Baileys (`debug` para investigar) |
 
