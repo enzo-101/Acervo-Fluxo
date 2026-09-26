@@ -111,6 +111,7 @@ Qualquer uma das duas variáveis vazia significa "vale em todo grupo" — o comp
 - **Teto por mensagem.** `MAX_ITEMS_PER_MESSAGE` (padrão 3) impede que alguém cole 30 links e dispare no ranking.
 - **Teto diário opcional.** `MAX_ITEMS_PER_PERSON_PER_DAY` (padrão 0 = desligado).
 - **Dedup por hash opcional.** Com `DEDUP_FILES_BY_HASH=true`, o bot usa o SHA-256 que o próprio WhatsApp envia junto do arquivo — renomear não burla a contagem. Sem isso, o dedup usa nome + tamanho.
+- **Reentrega de fila não repete ações.** Cada `message_id` processado é gravado — quando a fila offline do WhatsApp reenvia a mesma mensagem numa reconexão, o bot ignora em vez de reagir e responder de novo.
 
 ## Configuração
 
@@ -147,7 +148,7 @@ Isso só funciona com o banco na máquina. Com o bot num servidor, o banco fica 
 ## Ferramentas
 
 ```bash
-npm test               # 56 testes, sem tocar no WhatsApp nem no Pipefy
+npm test               # 71 testes, sem tocar no WhatsApp nem no Pipefy
 npm run ranking        # lista grupos
 npm run ranking -- 120363...@g.us mes   # ranking pelo terminal
 npm start -- --resumo-agora             # dispara o resumo diário na hora, para testar

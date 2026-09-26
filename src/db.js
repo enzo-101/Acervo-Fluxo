@@ -56,6 +56,14 @@ db.exec(`
     created_at INTEGER,
     avisado_em INTEGER NOT NULL
   );
+
+  -- Mensagens ja processadas pelo bot. A fila de reconexao do WhatsApp pode
+  -- reentregar uma mensagem que ja foi vista, e o dedup por fingerprint so
+  -- cobre contribuicoes — reacoes e respostas repetiriam sem esta tabela.
+  CREATE TABLE IF NOT EXISTS mensagens_processadas (
+    message_id    TEXT PRIMARY KEY,
+    processada_em INTEGER NOT NULL
+  );
 `);
 
 const statements = {
@@ -141,6 +149,8 @@ const statements = {
   buscarLead: db.prepare('SELECT card_id FROM leads_avisados WHERE card_id = ?'),
   contarLeads: db.prepare('SELECT COUNT(*) AS total FROM leads_avisados'),
   groupName: db.prepare('SELECT name FROM groups WHERE group_id = ?'),
+  marcarMensagem: db.prepare('INSERT OR IGNORE INTO mensagens_processadas (message_id, processada_em) VALUES (?, ?)'),
+  buscarMensagem: db.prepare('SELECT message_id FROM mensagens_processadas WHERE message_id = ?'),
 };
 
 export function rememberGroup(groupId, name) {
@@ -235,6 +245,17 @@ export function jaAvisouLead(cardId) {
 
 export function contarLeadsAvisados() {
   return statements.contarLeads.get()?.total ?? 0;
+}
+
+/** Devolve true se a mensagem ja passou pelo bot (reentrega da fila offline). */
+export function jaProcessouMensagem(messageId) {
+  if (!messageId) return false;
+  return Boolean(statements.buscarMensagem.get(String(messageId)));
+}
+
+export function marcarMensagemProcessada(messageId) {
+  if (!messageId) return;
+  statements.marcarMensagem.run(String(messageId), Date.now());
 }
 
 export function closeDb() {

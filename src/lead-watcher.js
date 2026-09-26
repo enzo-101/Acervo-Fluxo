@@ -7,7 +7,7 @@
  * daqui sai a tabela `leads_avisados`.
  */
 import { config } from './config.js';
-import { fetchCards } from './pipefy.js';
+import { fetchCardsResumo, fetchCard } from './pipefy.js';
 import { marcarLeadAvisado, jaAvisouLead, contarLeadsAvisados } from './db.js';
 
 let rodando = false;
@@ -68,11 +68,14 @@ export async function checarLeads(send, destinos) {
   rodando = true;
 
   try {
-    const cards = await fetchCards();
+    // Listagem magra (id + createdAt): suficiente para achar os novos. O
+    // detalhe completo so e buscado para os cards que serao anunciados —
+    // sao poucos por rodada, gracas ao LEAD_MAX_POR_RODADA.
+    const resumos = await fetchCardsResumo();
     const primeiraVez = contarLeadsAvisados() === 0;
     const corte = Date.now() - config.leadMaxAgeMs;
 
-    const novos = cards
+    const novos = resumos
       .filter((card) => card.createdAt != null)
       .filter((card) => card.createdAt >= corte)
       .filter((card) => !jaAvisouLead(card.id))
@@ -81,22 +84,40 @@ export async function checarLeads(send, destinos) {
     // Na primeira execucao o banco esta vazio e TODO card recente pareceria
     // novo. Registramos sem anunciar, para nao despejar o funil no grupo.
     if (primeiraVez) {
-      for (const card of cards) marcarLeadAvisado(card.id, card.createdAt ?? Date.now());
-      return { status: 'primeira-execucao', registrados: cards.length };
+      for (const card of resumos) marcarLeadAvisado(card.id, card.createdAt ?? Date.now());
+      return { status: 'primeira-execucao', registrados: resumos.length };
     }
 
     const enviados = [];
-    for (const card of novos.slice(0, config.leadMaxPorRodada)) {
+    for (const resumo of novos.slice(0, config.leadMaxPorRodada)) {
+      let card;
+      try {
+        card = await fetchCard(resumo.id);
+      } catch (error) {
+        // Detalhe indisponivel agora nao e motivo para descartar o lead:
+        // sem a marca ele e tentado de novo na proxima rodada.
+        console.error(`[leads] falha ao buscar card ${resumo.id}:`, error.message);
+        continue;
+      }
+
       const texto = formatar(card);
+      let entregue = false;
       for (const destino of destinos()) {
         try {
           await send(destino, texto);
+          entregue = true;
         } catch (error) {
           console.error(`[leads] falha ao avisar ${destino}:`, error.message);
         }
       }
-      marcarLeadAvisado(card.id, card.createdAt ?? Date.now());
-      enviados.push(card.id);
+
+      // So marca como avisado se pelo menos um grupo recebeu. Se todos os
+      // envios falharam (bot caiu, rede caiu), o card volta na proxima
+      // rodada em vez de sumir em silencio.
+      if (entregue) {
+        marcarLeadAvisado(card.id, card.createdAt ?? Date.now());
+        enviados.push(card.id);
+      }
     }
 
     // O que passou do teto entra no banco sem alarde, para nao virar enxurrada.

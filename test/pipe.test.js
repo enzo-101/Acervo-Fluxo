@@ -35,6 +35,10 @@ globalThis.fetch = async (url, init) => {
       },
     });
   }
+  if (corpo.query.includes('card(id:')) {
+    const node = cardsDoPipe.find((c) => String(c.id) === String(corpo.variables.cardId));
+    return jsonOk({ card: node ?? null });
+  }
   return jsonOk({
     cards: {
       pageInfo: { hasNextPage: false, endCursor: null },
@@ -167,6 +171,45 @@ test('o lead vai para todos os grupos informados', async () => {
   const enviados = [];
   await checarLeads(async (d, t) => enviados.push(d), () => ['g1@g.us', 'g2@g.us']);
   assert.deepEqual(enviados, ['g1@g.us', 'g2@g.us']);
+});
+
+test('lead nao marcado quando todos os envios falham volta na proxima rodada', async () => {
+  cardsDoPipe.push(cardCru({ id: '15', titulo: 'Retry', fase: '1', entradas: ['1'] }));
+
+  const falho = async () => {
+    throw new Error('sem conexao');
+  };
+  const r1 = await checarLeads(falho, () => ['g1@g.us']);
+  assert.equal(r1.avisados, 0, 'nenhum envio funcionou');
+
+  const enviados = [];
+  const r2 = await checarLeads(async (d, t) => enviados.push(d), () => ['g1@g.us']);
+  assert.equal(r2.avisados, 1, 'o lead e tentado de novo em vez de sumir');
+  assert.deepEqual(enviados, ['g1@g.us']);
+});
+
+test('falha ao buscar o detalhe do card nao descarta o lead', async () => {
+  cardsDoPipe.push(cardCru({ id: '16', titulo: 'Detalhe Falho', fase: '1', entradas: ['1'] }));
+
+  const anterior = globalThis.fetch;
+  const enviados = [];
+  globalThis.fetch = async (url, init) => {
+    const corpo = JSON.parse(init.body);
+    if (corpo.query.includes('card(id:')) {
+      return { ok: false, status: 500, json: async () => ({}) };
+    }
+    return anterior(url, init);
+  };
+
+  const r1 = await checarLeads(async (d, t) => enviados.push(d), () => ['g1@g.us']);
+  globalThis.fetch = anterior;
+
+  assert.equal(r1.avisados, 0);
+  assert.deepEqual(enviados, []);
+
+  const r2 = await checarLeads(async (d, t) => enviados.push(d), () => ['g1@g.us']);
+  assert.equal(r2.avisados, 1, 'recuperado na rodada seguinte');
+  assert.deepEqual(enviados, ['g1@g.us']);
 });
 
 test('card antigo nao e tratado como lead novo', async () => {
