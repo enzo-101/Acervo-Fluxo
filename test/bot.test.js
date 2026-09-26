@@ -97,6 +97,25 @@ test('um PDF e contabilizado, com reacao e confirmacao', async () => {
   assert.match(transport.replies[0], /PDF registrado para \*Ana Paula\* — agora sao 1 contribuicao/);
 });
 
+test('mensagem reentregue pela fila de reconexao nao reage nem repete resposta', async () => {
+  // A fila offline do WhatsApp pode entregar a mesma mensagem duas vezes.
+  // Grupo separado para nao poluir o ranking que os outros testes conferem.
+  const msg = baileysMsg({ documento: { nome: 'reentrega.pdf', sha: 'hash-reentrega' } });
+  msg.key.remoteJid = '120363999999999999@g.us';
+  const incoming = normalize(msg);
+
+  const t1 = fakeTransport();
+  const r1 = await handleIncoming({ ...incoming, groupName: 'Outro' }, t1);
+  assert.equal(r1.action, 'counted');
+  assert.deepEqual(t1.reactions, ['📚']);
+
+  const t2 = fakeTransport();
+  const r2 = await handleIncoming({ ...incoming, groupName: 'Outro' }, t2);
+  assert.equal(r2.action, 'already-processed');
+  assert.deepEqual(t2.replies, []);
+  assert.deepEqual(t2.reactions, []);
+});
+
 test('conversa normal nao gera nada', async () => {
   const { action, transport } = await enviar(baileysMsg({ texto: 'bom dia pessoal' }));
   assert.equal(action, 'ignored');

@@ -100,6 +100,13 @@ test('ajuda responde em qualquer grupo permitido', () => {
   assert.equal(comandoPermitido('ajuda', OUTRO), true);
 });
 
+test('comando desconhecido nao roda em grupo nenhum (fail-closed)', () => {
+  // Um nome que nao esta no registro nunca responde — antes, escopo nao
+  // listado significava "vale em todo grupo", o oposto do seguro.
+  assert.equal(comandoPermitido('naoexiste', ACERVO), false);
+  assert.equal(comandoPermitido('naoexiste', COMERCIAL), false);
+});
+
 
 test('!id responde em qualquer grupo, inclusive fora de escopo', async () => {
   // Precisa funcionar em grupo nenhum dos dois escopos: e justamente ali que

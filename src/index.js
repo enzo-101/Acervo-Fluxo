@@ -9,7 +9,7 @@ import {
   DisconnectReason,
   Browsers,
 } from 'baileys';
-import { config, isGroupAllowed, isPipeGroup } from './config.js';
+import { config, isPipeGroup } from './config.js';
 import { handleIncoming } from './bot.js';
 import { normalize } from './baileys-message.js';
 import { startScheduler, startLeadWatcher, sendDailySummary } from './scheduler.js';
@@ -138,11 +138,16 @@ async function connect() {
       console.log(`   Comercial em: ${config.pipefyToken ? escopo(config.pipeGroups) : 'desligado (sem PIPEFY_TOKEN)'}`);
       if (!schedulerIniciado) {
         startScheduler(send);
-        // Lead novo so vai para grupo de escopo comercial (PIPE_GROUPS).
+        // Lead novo so vai para grupo de escopo comercial. Com PIPE_GROUPS
+        // definido a lista sai da config — um grupo configurado recebe leads
+        // mesmo antes da primeira mensagem chegar ao banco. Sem a variavel,
+        // cai no comportamento antigo: todo grupo conhecido e de escopo.
         startLeadWatcher(send, () =>
-          getAllGroups()
-            .map((g) => g.group_id)
-            .filter(isPipeGroup)
+          config.pipeGroups.length > 0
+            ? config.pipeGroups
+            : getAllGroups()
+                .map((g) => g.group_id)
+                .filter(isPipeGroup)
         );
         schedulerIniciado = true;
       }
@@ -225,6 +230,19 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (error) => console.error('[unhandledRejection]', error));
 
+// O boot pode falhar antes de a conexao existir (sem rede para buscar a versao
+// do protocolo, por exemplo). Sem retentativa, o processo ficava vivo e mudo —
+// e um gerente de processo so reinicia quem morre.
+async function connectComRetentativa() {
+  try {
+    await connect();
+  } catch (error) {
+    console.error('❌ Falha ao conectar:', error.message);
+    console.log('   Tentando de novo em 5s...');
+    setTimeout(() => connectComRetentativa(), 5000);
+  }
+}
+
 console.log('🚀 Iniciando...');
 
 if (config.botPhoneNumber) {
@@ -237,4 +255,4 @@ if (config.botPhoneNumber) {
   console.log('   Pareamento por QR code (defina BOT_PHONE_NUMBER para usar codigo)');
 }
 
-await connect();
+await connectComRetentativa();

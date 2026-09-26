@@ -1,4 +1,4 @@
-import { config, isRankingGroup, isPipeGroup } from './config.js';
+import { config, isGroupAllowed, isRankingGroup, isPipeGroup } from './config.js';
 import { getRecent } from './db.js';
 import { buildRankingText, buildPersonalText, resolvePeriod } from './ranking.js';
 import { buildPipeReport, explicarErro } from './pipe-report.js';
@@ -87,25 +87,101 @@ const RULES_TEXT = [
   `⚖️ No maximo ${config.maxItemsPerMessage} ${config.maxItemsPerMessage === 1 ? 'item' : 'itens'} por mensagem.`,
 ].join('\n');
 
+async function cmdRanking({ args, groupId, authorId }) {
+  const period = resolvePeriod(args[0] ?? '');
+  if (!period) {
+    return `Periodo desconhecido. Use: \`!ranking\`, \`!ranking mes\`, \`!ranking semana\` ou \`!ranking hoje\`.`;
+  }
+  return buildRankingText(groupId, {
+    periodKey: period.key,
+    highlightAuthorId: authorId,
+  });
+}
+
+async function cmdPipe({ args }) {
+  if (!config.pipefyToken) {
+    return '⚠️ O !pipe nao esta configurado: falta a variavel PIPEFY_TOKEN.';
+  }
+  try {
+    return await buildPipeReport(args[0] ?? '');
+  } catch (error) {
+    return explicarErro(error);
+  }
+}
+
+async function cmdMeu({ groupId, authorId, displayName }) {
+  return buildPersonalText(groupId, authorId, displayName);
+}
+
+async function cmdUltimas({ groupId }) {
+  const rows = getRecent(groupId, 8);
+  if (rows.length === 0) return '_Nada registrado ainda._';
+  const lines = ['🕒 *Ultimos materiais*', ''];
+  for (const row of rows) {
+    const what = (row.raw ?? '').slice(0, 60);
+    lines.push(`• *${row.display_name}* — ${row.label}${what ? ` · ${what}` : ''}`);
+    lines.push(`  _${formatDate(row.created_at)}_`);
+  }
+  return lines.join('\n');
+}
+
+async function cmdId({ groupId }) {
+  // O ID do grupo nao aparece em lugar nenhum da interface do WhatsApp, e
+  // o banco fica no volume do servidor. Perguntar ao bot e o caminho curto
+  // para preencher RANKING_GROUPS e PIPE_GROUPS.
+  return [
+    '🆔 *ID deste grupo*',
+    '',
+    `\`${groupId}\``,
+    '',
+    '_Copie e cole em RANKING_GROUPS ou PIPE_GROUPS._',
+  ].join('\n');
+}
+
 /**
- * A que assunto cada comando pertence. O escopo decide em que grupos ele
+ * Registro de comandos: cada comando declara seus nomes, seu escopo e seu
+ * handler num so lugar. O escopo e obrigatorio — um comando novo sem escopo
+ * simplesmente nao responde em nenhum grupo, em vez de vazar para todos.
+ * 'global' e para comandos que respondem em qualquer grupo permitido.
+ */
+const COMANDOS = [
+  { nomes: ['ranking', 'rank', 'top', 'top10'], escopo: 'ranking', run: cmdRanking },
+  { nomes: ['pipe', 'funil'], escopo: 'pipe', run: cmdPipe },
+  { nomes: ['meu', 'meus', 'minhas', 'eu'], escopo: 'ranking', run: cmdMeu },
+  { nomes: ['ultimas', 'ultimos', 'recentes'], escopo: 'ranking', run: cmdUltimas },
+  { nomes: ['regras', 'oquevale', 'criterios'], escopo: 'ranking', run: async () => RULES_TEXT },
+  { nomes: ['id', 'grupo'], escopo: 'global', run: cmdId },
+  { nomes: ['ajuda', 'help', 'comandos', 'bot'], escopo: 'global', run: async ({ groupId }) => montarAjuda(groupId) },
+];
+
+const POR_NOME = new Map();
+for (const comando of COMANDOS) {
+  for (const nome of comando.nomes) {
+    if (POR_NOME.has(nome)) {
+      throw new Error(`Nome de comando duplicado: ${nome}`);
+    }
+    POR_NOME.set(nome, comando);
+  }
+}
+
+/**
+ * A que assunto cada escopo pertence. O escopo decide em que grupos o comando
  * responde: dado comercial nao deve aparecer no grupo do acervo, e ranking
  * no grupo do comercial so faria ruido.
  */
 const ESCOPOS = {
-  ranking: 'ranking', rank: 'ranking', top: 'ranking', top10: 'ranking',
-  meu: 'ranking', meus: 'ranking', minhas: 'ranking', eu: 'ranking',
-  ultimas: 'ranking', ultimos: 'ranking', recentes: 'ranking',
-  regras: 'ranking', oquevale: 'ranking', criterios: 'ranking',
-  pipe: 'pipe', funil: 'pipe',
-  // ajuda/help ficam de fora: respondem em qualquer grupo permitido.
+  ranking: isRankingGroup,
+  pipe: isPipeGroup,
+  global: isGroupAllowed,
 };
 
-/** O comando pode rodar neste grupo? */
+/** O comando pode rodar neste grupo? Comando desconhecido nao roda em nenhum. */
 export function comandoPermitido(name, groupId) {
-  const escopo = ESCOPOS[name];
-  if (!escopo) return true;
-  return escopo === 'pipe' ? isPipeGroup(groupId) : isRankingGroup(groupId);
+  const comando = POR_NOME.get(name);
+  if (!comando) return false;
+  const permitido = ESCOPOS[comando.escopo];
+  if (!permitido) return false;
+  return permitido(groupId);
 }
 
 /**
@@ -113,83 +189,11 @@ export function comandoPermitido(name, groupId) {
  * nao existir ou nao valer neste grupo (nesses casos o bot fica quieto).
  */
 export async function runCommand({ name, args }, context) {
-  const { groupId, authorId, displayName } = context;
+  const comando = POR_NOME.get(name);
 
   // Silencio de proposito: responder "voce nao pode" ja revelaria que existe
   // um funil comercial em algum lugar. Quem tem acesso sabe onde pedir.
-  if (!comandoPermitido(name, groupId)) return null;
+  if (!comando || !comandoPermitido(name, context.groupId)) return null;
 
-  switch (name) {
-    case 'ranking':
-    case 'rank':
-    case 'top':
-    case 'top10': {
-      const period = resolvePeriod(args[0] ?? '');
-      if (!period) {
-        return `Periodo desconhecido. Use: \`!ranking\`, \`!ranking mes\`, \`!ranking semana\` ou \`!ranking hoje\`.`;
-      }
-      return buildRankingText(groupId, {
-        periodKey: period.key,
-        highlightAuthorId: authorId,
-      });
-    }
-
-    case 'pipe':
-    case 'funil':
-      if (!config.pipefyToken) {
-        return '⚠️ O !pipe nao esta configurado: falta a variavel PIPEFY_TOKEN.';
-      }
-      try {
-        return await buildPipeReport(args[0] ?? '');
-      } catch (error) {
-        return explicarErro(error);
-      }
-
-    case 'meu':
-    case 'meus':
-    case 'minhas':
-    case 'eu':
-      return buildPersonalText(groupId, authorId, displayName);
-
-    case 'ultimas':
-    case 'ultimos':
-    case 'recentes': {
-      const rows = getRecent(groupId, 8);
-      if (rows.length === 0) return '_Nada registrado ainda._';
-      const lines = ['🕒 *Ultimos materiais*', ''];
-      for (const row of rows) {
-        const what = (row.raw ?? '').slice(0, 60);
-        lines.push(`• *${row.display_name}* — ${row.label}${what ? ` · ${what}` : ''}`);
-        lines.push(`  _${formatDate(row.created_at)}_`);
-      }
-      return lines.join('\n');
-    }
-
-    case 'regras':
-    case 'oquevale':
-    case 'criterios':
-      return RULES_TEXT;
-
-    case 'id':
-    case 'grupo':
-      // O ID do grupo nao aparece em lugar nenhum da interface do WhatsApp, e
-      // o banco fica no volume do servidor. Perguntar ao bot e o caminho curto
-      // para preencher RANKING_GROUPS e PIPE_GROUPS.
-      return [
-        '🆔 *ID deste grupo*',
-        '',
-        `\`${groupId}\``,
-        '',
-        '_Copie e cole em RANKING_GROUPS ou PIPE_GROUPS._',
-      ].join('\n');
-
-    case 'ajuda':
-    case 'help':
-    case 'comandos':
-    case 'bot':
-      return montarAjuda(groupId);
-
-    default:
-      return null;
-  }
+  return comando.run({ ...context, args });
 }

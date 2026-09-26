@@ -90,52 +90,97 @@ export async function fetchPipe(pipeId = config.pipefyPipeId, opcoes = {}) {
   };
 }
 
+const CAMPOS_CARD = `
+  id
+  title
+  createdAt
+  done
+  current_phase { id name }
+  labels { id name }
+  fields { name report_value value }
+  assignees { id name }
+  phases_history { firstTimeIn lastTimeOut phase { id name } }
+`;
+
 const QUERY_CARDS = `
   query ($pipeId: ID!, $after: String) {
     cards(pipe_id: $pipeId, first: 50, after: $after) {
       pageInfo { hasNextPage endCursor }
-      edges {
-        node {
-          id
-          title
-          createdAt
-          done
-          current_phase { id name }
-          labels { id name }
-          fields { name report_value value }
-          assignees { id name }
-          phases_history { firstTimeIn lastTimeOut phase { id name } }
-        }
-      }
+      edges { node { ${CAMPOS_CARD} } }
     }
   }
 `;
 
+// So o necessario para descobrir quais cards sao novos. O vigia de leads roda
+// a cada poucos minutos; buscar fields/phases_history do pipe inteiro a cada
+// rodada gastaria a cota da API para nada — o detalhe so vem via fetchCard
+// para os cards que vao ser anunciados.
+const QUERY_CARDS_RESUMO = `
+  query ($pipeId: ID!, $after: String) {
+    cards(pipe_id: $pipeId, first: 50, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      edges { node { id createdAt } }
+    }
+  }
+`;
+
+const QUERY_CARD = `
+  query ($cardId: ID!) {
+    card(id: $cardId) { ${CAMPOS_CARD} }
+  }
+`;
+
 /**
- * Lista todos os cards do pipe, seguindo a paginacao ate o fim.
- *
- * `maxPaginas` existe como freio: um pipe grande com uma query em loop
- * consumiria a cota da API inteira sem que ninguem percebesse.
+ * Segue a paginacao ate o fim. `maxPaginas` existe como freio: um pipe grande
+ * com uma query em loop consumiria a cota da API inteira sem que ninguem
+ * percebesse. Quando o freio dispara, avisa — truncar em silencio faria o
+ * funil e os leads ficarem errados sem nenhum sinal.
  */
-export async function fetchCards(pipeId = config.pipefyPipeId, { maxPaginas = 40, ...opcoes } = {}) {
-  const cards = [];
+async function fetchAllPages(query, pipeId, { maxPaginas = 40, ...opcoes } = {}) {
+  const nodes = [];
   let after = null;
   let paginas = 0;
 
   do {
-    const data = await graphql(QUERY_CARDS, { pipeId: String(pipeId), after }, opcoes);
+    const data = await graphql(query, { pipeId: String(pipeId), after }, opcoes);
     const conexao = data?.cards;
     if (!conexao) break;
 
     for (const edge of conexao.edges ?? []) {
-      if (edge?.node) cards.push(normalizeCard(edge.node));
+      if (edge?.node) nodes.push(edge.node);
     }
 
     after = conexao.pageInfo?.hasNextPage ? conexao.pageInfo.endCursor : null;
     paginas += 1;
   } while (after && paginas < maxPaginas);
 
-  return cards;
+  if (after) {
+    console.warn(`[pipefy] limite de ${maxPaginas} paginas atingido (${nodes.length} cards) — pipe maior que o suportado, resultados incompletos`);
+  }
+
+  return nodes;
+}
+
+/** Lista todos os cards do pipe com todos os campos (usado pelo !pipe). */
+export async function fetchCards(pipeId = config.pipefyPipeId, opcoes = {}) {
+  const nodes = await fetchAllPages(QUERY_CARDS, pipeId, opcoes);
+  return nodes.map(normalizeCard);
+}
+
+/** Lista id + data de criacao de todos os cards (usado pelo vigia de leads). */
+export async function fetchCardsResumo(pipeId = config.pipefyPipeId, opcoes = {}) {
+  const nodes = await fetchAllPages(QUERY_CARDS_RESUMO, pipeId, opcoes);
+  return nodes.map((node) => ({
+    id: String(node.id),
+    createdAt: node.createdAt ? Date.parse(node.createdAt) : null,
+  }));
+}
+
+/** Busca um card completo pelo id. */
+export async function fetchCard(cardId, opcoes = {}) {
+  const data = await graphql(QUERY_CARD, { cardId: String(cardId) }, opcoes);
+  if (!data?.card) throw new PipefyError(`Card ${cardId} nao encontrado ou sem acesso.`);
+  return normalizeCard(data.card);
 }
 
 /** Achata o card do GraphQL no formato que o resto do bot usa. */

@@ -5,6 +5,8 @@ import {
   rememberPerson,
   recordContribution,
   countByAuthorSince,
+  jaProcessouMensagem,
+  marcarMensagemProcessada,
 } from './db.js';
 import { parseCommand, runCommand } from './commands.js';
 import { startOfDay } from './ranking.js';
@@ -40,6 +42,12 @@ export async function handleIncoming(incoming, transport) {
   if (!groupId.endsWith('@g.us')) return { action: 'ignored' };
   if (!isGroupAllowed(groupId)) return { action: 'ignored' };
   if (isTooOld(incoming.timestamp)) return { action: 'too-old' };
+
+  // A fila de reconexao pode reentregar a mesma mensagem. O dedup por
+  // fingerprint so protege contribuicoes — sem este corte, cada reconexao
+  // repetiria reacoes (♻️ numa mensagem ja vista) e respostas de comando.
+  if (jaProcessouMensagem(incoming.messageId)) return { action: 'already-processed' };
+  marcarMensagemProcessada(incoming.messageId);
 
   rememberGroup(groupId, groupName);
   rememberPerson(groupId, authorId, displayName);
